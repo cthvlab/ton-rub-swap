@@ -1,0 +1,45 @@
+/*
+  Смарт-контракт для обмена TON на RUB 
+  - Пользователь отправляет TON
+  - Контракт отправляет RUB в ответ
+*/
+
+#include "stdlib.fc"
+#include "op-codes.fc"
+
+const int OWNER = 0xEQA_0Duwba0T0_xx9I9lAUX39wrAwx5TN_xcrxjWAs3JfuaB;
+const int JETTON_WALLET = 0xEQCdn7l_io6rqsgOLNKKqPa5wV8k9x4gB5wk6AzbJjpZwBDv;
+
+int swap_rate = 1; // 1 TON = 1 RUB
+
+recv_internal(slice in_msg) {
+    int op = in_msg~load_uint(32);
+    int sender_addr = in_msg~load_msg_addr();
+    
+    if (op == 0) {
+        ;; Обмен TON на Jetton
+        int ton_amount = in_msg~load_coins();
+        if (ton_amount > 0) {
+            int jetton_amount = ton_amount * swap_rate;
+            send_jetton(sender_addr, jetton_amount);
+        }
+    } elif (op == 1 && sender_addr == OWNER) {
+        ;; Установка нового курса (только владелец)
+        int new_rate = in_msg~load_uint(32);
+        if (new_rate > 0) {
+            swap_rate = new_rate;
+        }
+    }
+}
+
+send_jetton(int to, int amount) {
+    if (amount > 0) {
+        slice msg_body = begin_cell()
+            .store_uint(0x18, 32) ;; Jetton transfer opcode
+            .store_coins(amount)
+            .store_msg_addr(to)
+            .end_cell();
+        
+        send_raw_message(JETTON_WALLET, msg_body, 0);
+    }
+}
